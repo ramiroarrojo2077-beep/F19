@@ -55,8 +55,10 @@ export function describeError(e) {
   const t = e && e.type;
   if (t === 'peer-unavailable') return 'No existe una sala con ese código.';
   if (t === 'unavailable-id') return 'Ese código de sala ya está en uso.';
-  if (t === 'network' || t === 'server-error' || t === 'socket-error' || t === 'socket-closed') return 'No se pudo conectar al servidor de salas. Revisá tu conexión.';
-  if (t === 'browser-incompatible') return 'Tu navegador no soporta WebRTC.';
+  if (t === 'network' || t === 'server-error' || t === 'socket-error' || t === 'socket-closed') {
+    return 'No se pudo conectar al servidor de salas. Revisá tu conexión; si estás en una vista previa, abrí el juego desde su página publicada (por ejemplo GitHub Pages).';
+  }
+  if (t === 'browser-incompatible') return 'Este navegador o esta vista no permite conexiones WebRTC. Abrí el juego desde su página publicada.';
   if (e && e.message === 'timeout') return 'La conexión tardó demasiado. Probá de nuevo.';
   return (e && e.message) || 'Error de conexión.';
 }
