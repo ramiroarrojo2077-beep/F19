@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>F19 Grand Prix</title>
+  <meta name="description" content="Juego de carreras de Fórmula en 3D para el navegador: circuito completo, 10 autos con IA, clima soleado y gráficos en tiempo real.">
+  <meta name="theme-color" content="#0b0d11">
+  <meta property="og:title" content="F19 Grand Prix">
+  <meta property="og:description" content="Carreras de Fórmula en 3D directamente en el navegador.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23e10600'/%3E%3Ctext x='32' y='44' font-family='Arial' font-weight='900' font-size='30' text-anchor='middle' fill='white'%3EF19%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;0,700;0,900;1,900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three/build/three.module.min.js",
+        "three/addons/": "./vendor/three/addons/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="c"></canvas>
+
+  <div id="loading">
+    <div class="logo"><b>F19</b><span>GRAND PRIX</span></div>
+    <div class="bar"><i></i></div>
+    <p id="load-status">Cargando…</p>
+    <noscript>Este juego necesita JavaScript.</noscript>
+  </div>
+
+  <!-- HUD de carrera -->
+  <div id="hud" class="hidden">
+    <div id="tower"></div>
+    <div id="topbar">
+      <div class="blk pos"><small>POS</small><b id="hud-pos">1</b><em id="hud-pos-total">/10</em></div>
+      <div class="blk lap"><small id="hud-lap-label">VUELTA</small><b id="hud-lap">1/3</b></div>
+    </div>
+    <div id="timing">
+      <div><small>ACTUAL</small><b id="hud-cur">0:00.000</b></div>
+      <div><small>ÚLTIMA</small><b id="hud-last">--:--.---</b></div>
+      <div class="best"><small>MEJOR</small><b id="hud-best">--:--.---</b></div>
+      <span id="hud-delta"></span>
+    </div>
+    <canvas id="minimap"></canvas>
+    <div id="dash">
+      <div id="hud-rpm"></div>
+      <div class="row">
+        <div class="gear"><b id="hud-gear">N</b></div>
+        <div class="speed"><b id="hud-speed">0</b><small>KM/H</small></div>
+      </div>
+      <div id="hud-drs">DRS</div>
+    </div>
+    <div id="message"></div>
+    <div id="submessage"></div>
+    <div id="lights">
+      <div class="light"><i></i><i></i></div>
+      <div class="light"><i></i><i></i></div>
+      <div class="light"><i></i><i></i></div>
+      <div class="light"><i></i><i></i></div>
+      <div class="light"><i></i><i></i></div>
+    </div>
+    <div id="wrongway">⚠ SENTIDO CONTRARIO</div>
+    <div id="hud-cam"></div>
+  </div>
+
+  <!-- Controles táctiles -->
+  <div id="touch" class="hidden">
+    <div class="tl">
+      <button data-touch="left" aria-label="Izquierda">◀</button>
+      <button data-touch="right" aria-label="Derecha">▶</button>
+    </div>
+    <div class="tr">
+      <button data-touch="drs" class="small" aria-label="DRS">DRS</button>
+      <button data-touch="down" class="brake" aria-label="Freno">FRENO</button>
+      <button data-touch="up" class="gas" aria-label="Acelerar">GAS</button>
+    </div>
+    <div class="ttop">
+      <button id="touch-cam" aria-label="Cámara">🎥</button>
+      <button id="touch-pause" aria-label="Pausa">❚❚</button>
+    </div>
+  </div>
+
+  <div id="rotate">📱↻ Girá el teléfono para jugar en horizontal</div>
+
+  <!-- Menú principal -->
+  <div id="menu" class="overlay">
+    <div class="panel">
+      <div class="logo"><b>F19</b><span>GRAND PRIX</span></div>
+      <div class="opt-group modes" data-opt="mode">
+        <button data-v="race">🏁 Carrera</button>
+        <button data-v="tt">⏱ Contrarreloj</button>
+      </div>
+      <h3>Equipo</h3>
+      <div id="teams"></div>
+      <div id="race-opts" class="two">
+        <div>
+          <h3>Vueltas</h3>
+          <div class="opt-group" data-opt="laps">
+            <button data-v="1">1</button><button data-v="3">3</button><button data-v="5">5</button><button data-v="10">10</button>
+          </div>
+        </div>
+        <div>
+          <h3>Dificultad</h3>
+          <div class="opt-group" data-opt="difficulty">
+            <button data-v="facil">Fácil</button><button data-v="normal">Normal</button><button data-v="dificil">Difícil</button>
+          </div>
+        </div>
+      </div>
+      <h3>Cámara</h3>
+      <div class="opt-group" data-opt="camera">
+        <button data-v="chase">Persecución</button><button data-v="far">Lejana</button><button data-v="tcam">T-Cam</button><button data-v="cockpit">Cockpit</button>
+      </div>
+      <div class="two">
+        <div>
+          <h3>Gráficos</h3>
+          <div class="opt-group" data-opt="quality">
+            <button data-v="alta">Alta</button><button data-v="media">Media</button><button data-v="baja">Baja</button>
+          </div>
+        </div>
+        <div>
+          <h3>Ayuda de frenado</h3>
+          <div class="opt-group" data-opt="assist">
+            <button data-v="1">Sí</button><button data-v="0">No</button>
+          </div>
+        </div>
+      </div>
+      <p id="quality-note">La calidad nueva se aplica al recargar. <button id="btn-reload">Recargar ahora</button></p>
+      <button id="btn-start" class="cta">¡A CORRER!</button>
+      <p id="best-tt"></p>
+    </div>
+    <div class="help">
+      <div><kbd>W</kbd><kbd>↑</kbd> Acelerar</div>
+      <div><kbd>S</kbd><kbd>↓</kbd> Frenar / Reversa</div>
+      <div><kbd>A</kbd><kbd>D</kbd> Girar</div>
+      <div><kbd>Espacio</kbd> DRS</div>
+      <div><kbd>C</kbd> Cámara</div>
+      <div><kbd>L</kbd> Mirar atrás</div>
+      <div><kbd>R</kbd> Volver a pista</div>
+      <div><kbd>Esc</kbd> Pausa</div>
+      <div><kbd>M</kbd> Sonido</div>
+      <div class="pad">🎮 Compatible con mando</div>
+    </div>
+    <button id="btn-sound" class="icon" aria-label="Sonido">🔊</button>
+    <button id="btn-fs" class="icon" aria-label="Pantalla completa">⛶</button>
+  </div>
+
+  <!-- Pausa -->
+  <div id="pause" class="overlay hidden">
+    <div class="panel small">
+      <h2>PAUSA</h2>
+      <button id="btn-resume" class="cta">Continuar</button>
+      <button id="btn-restart">Reiniciar carrera</button>
+      <button id="btn-menu">Menú principal</button>
+    </div>
+  </div>
+
+  <!-- Resultados -->
+  <div id="results" class="overlay hidden">
+    <div class="panel wide">
+      <h2 id="results-title">RESULTADOS</h2>
+      <table>
+        <thead><tr><th>P</th><th>Piloto</th><th class="team-n">Equipo</th><th>Tiempo</th><th>Mejor vuelta</th></tr></thead>
+        <tbody id="results-body"></tbody>
+      </table>
+      <div class="btns">
+        <button id="btn-again" class="cta">Revancha</button>
+        <button id="btn-results-menu">Menú</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
