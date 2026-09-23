@@ -39,7 +39,7 @@ export class CameraRig {
     else if (mode === 'cine') this._cine(car, track, dt);
 
     // vibración por pianos, pasto y golpes
-    const rough = (car.surface === 1 ? 0.35 : car.surface >= 2 ? 0.6 : 0) * clamp(Math.abs(car.speed) / 40, 0, 1);
+    const rough = (car.surface === 1 ? 0.35 : car.surface === 2 || car.surface === 3 ? 0.6 : 0) * clamp(Math.abs(car.speed) / 40, 0, 1);
     const sh = (this.shake + rough) * (mode === 'cockpit' || mode === 'tcam' ? 0.035 : 0.06);
     if (sh > 0) {
       this.cam.position.x += (Math.random() - 0.5) * sh;
@@ -68,9 +68,13 @@ export class CameraRig {
     const height = far ? 3.3 : 2.2;
     const fx = Math.sin(this.h), fz = Math.cos(this.h);
     const px = car.x - fx * dist, pz = car.z - fz * dist;
-    this.pos.set(px, instant ? height : damp(this.pos.y || height, height, 6, dt), pz);
+    const cy = car.y || 0;
+    // altura relativa suavizada (evita saltos en cambios de pendiente)
+    this.relY = instant ? height : damp(this.relY ?? height, height, 6, dt);
+    this.baseY = instant ? cy : damp(this.baseY ?? cy, cy, 10, dt);
+    this.pos.set(px, this.baseY + this.relY, pz);
     this.cam.position.copy(this.pos);
-    this.look.set(car.x + fx * 6, far ? 1.0 : 0.9, car.z + fz * 6);
+    this.look.set(car.x + fx * 6, this.baseY + (far ? 1.0 : 0.9), car.z + fz * 6);
     this.cam.lookAt(this.look);
     this.fov = damp(this.fov, 60 + clamp(v / 95, 0, 1) * 14, 4, instant ? 1 : dt);
   }
@@ -105,9 +109,9 @@ export class CameraRig {
     }
     const p = this.tv.pos;
     this.cam.position.copy(p);
-    this._v.set(car.x, 0.8, car.z);
+    this._v.set(car.x, (car.y || 0) + 0.8, car.z);
     this.look.x = damp(this.look.x, this._v.x, 10, dt);
-    this.look.y = 0.8;
+    this.look.y = this._v.y;
     this.look.z = damp(this.look.z, this._v.z, 10, dt);
     if (this.look.distanceTo(this._v) > 30) this.look.copy(this._v);
     this.cam.lookAt(this.look);
@@ -133,8 +137,9 @@ export class CameraRig {
       // órbita alrededor del auto
       const a = car.heading + 0.9 + c.t * 0.18;
       const r = 7.5;
-      this.cam.position.set(car.x + Math.sin(a) * r, 1.6 + Math.sin(c.t * 0.3) * 0.4, car.z + Math.cos(a) * r);
-      this.look.set(car.x, 0.6, car.z);
+      const cy = car.y || 0;
+      this.cam.position.set(car.x + Math.sin(a) * r, cy + 1.6 + Math.sin(c.t * 0.3) * 0.4, car.z + Math.cos(a) * r);
+      this.look.set(car.x, cy + 0.6, car.z);
       this.cam.lookAt(this.look);
       this.fov = 42;
     } else if (kind === 1) {
@@ -143,15 +148,17 @@ export class CameraRig {
       // cámara baja lateral
       const fx = Math.sin(car.heading), fz = Math.cos(car.heading);
       const sx = fz, sz = -fx;
-      this.cam.position.set(car.x + sx * 3.2 - fx * (2 - c.t * 0.25), 0.45, car.z + sz * 3.2 - fz * (2 - c.t * 0.25));
-      this.look.set(car.x + fx * 1.5, 0.5, car.z + fz * 1.5);
+      const cy = car.y || 0;
+      this.cam.position.set(car.x + sx * 3.2 - fx * (2 - c.t * 0.25), cy + 0.45, car.z + sz * 3.2 - fz * (2 - c.t * 0.25));
+      this.look.set(car.x + fx * 1.5, cy + 0.5, car.z + fz * 1.5);
       this.cam.lookAt(this.look);
       this.fov = 55;
     } else {
       // helicóptero
       const fx = Math.sin(car.heading), fz = Math.cos(car.heading);
-      this.cam.position.set(car.x - fx * 30 + fz * 12, 22, car.z - fz * 30 - fx * 12);
-      this.look.set(car.x + fx * 10, 0, car.z + fz * 10);
+      const cy = car.y || 0;
+      this.cam.position.set(car.x - fx * 30 + fz * 12, cy + 22, car.z - fz * 30 - fx * 12);
+      this.look.set(car.x + fx * 10, cy, car.z + fz * 10);
       this.cam.lookAt(this.look);
       this.fov = 50;
     }

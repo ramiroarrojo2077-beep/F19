@@ -3,22 +3,13 @@
 import { clamp, smoothstep, wrapAngle } from './utils.js';
 import { cornerSpeed, brakeDecel, engineAccel, dragDecel, CAR_HALF_WIDTH } from './physics.js';
 
-// Puntos de control (x, z) en metros. El índice 0 es la línea de meta.
-export const CONTROL = [
-  [-300, 0], [0, 0], [300, 0], [480, 0],
-  [580, 40], [610, 130], [560, 220], [450, 250],
-  [340, 225], [250, 280], [150, 250], [60, 310],
-  [-10, 410], [10, 530], [90, 610], [60, 700],
-  [-40, 720], [-180, 690], [-400, 640], [-620, 600],
-  [-760, 530], [-820, 400], [-790, 280], [-840, 200],
-  [-800, 110], [-700, 40], [-560, 0],
-];
+import { TRACKS } from './tracks.js';
 
 export const HALF_WIDTH = 7;
 export const KERB_W = 1.6;
 export const SAMPLE_DS = 2;
 
-// Catmull-Rom centrípeta cerrada, muestreada densamente.
+// Catmull-Rom centrípeta cerrada (x, z, y), parametrizada por la distancia horizontal.
 function sampleCatmull(ctrl, perSeg = 160) {
   const n = ctrl.length;
   const out = [];
@@ -28,8 +19,8 @@ function sampleCatmull(ctrl, perSeg = 160) {
     const t0 = 0, t1 = tj(t0, p0, p1), t2 = tj(t1, p1, p2), t3 = tj(t2, p2, p3);
     for (let k = 0; k < perSeg; k++) {
       const t = t1 + ((t2 - t1) * k) / perSeg;
-      const pt = [0, 0];
-      for (let d = 0; d < 2; d++) {
+      const pt = [0, 0, 0];
+      for (let d = 0; d < 3; d++) {
         const A1 = ((t1 - t) / (t1 - t0)) * p0[d] + ((t - t0) / (t1 - t0)) * p1[d];
         const A2 = ((t2 - t) / (t2 - t1)) * p1[d] + ((t - t1) / (t2 - t1)) * p2[d];
         const A3 = ((t3 - t) / (t3 - t2)) * p2[d] + ((t - t2) / (t3 - t2)) * p3[d];
@@ -60,9 +51,11 @@ function smoothCyclic(arr, radius, passes = 1) {
 }
 
 export class TrackData {
-  constructor(ctrl = CONTROL) {
+  constructor(def = TRACKS[0]) {
+    this.def = def;
     this.hw = HALF_WIDTH;
-    this._sample(ctrl);
+    this.gripMul = 1;
+    this._sample(def.ctrl.map((p) => [p[0], p[1], p[2] || 0]));
     this._geometry();
     this._edges();
     this._racingLine();
@@ -83,6 +76,7 @@ export class TrackData {
     this.ds = L / N;
     this.px = new Float32Array(N);
     this.pz = new Float32Array(N);
+    const py = new Float32Array(N);
     let j = 0;
     for (let i = 0; i < N; i++) {
       const s = i * this.ds;
@@ -91,7 +85,17 @@ export class TrackData {
       const a = dense[j], b = dense[(j + 1) % dense.length];
       this.px[i] = a[0] + (b[0] - a[0]) * t;
       this.pz[i] = a[1] + (b[1] - a[1]) * t;
+      py[i] = a[2] + (b[2] - a[2]) * t;
     }
+    // alturas suaves para que no haya saltos
+    this.py = smoothCyclic(py, 25, 3);
+    this.grade = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      this.grade[i] = (this.py[(i + 1) % N] - this.py[(i - 1 + N) % N]) / (2 * this.ds);
+    }
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < N; i++) { lo = Math.min(lo, this.py[i]); hi = Math.max(hi, this.py[i]); }
+    this.minY = lo; this.maxY = hi;
   }
 
   _geometry() {
@@ -221,8 +225,31 @@ export class TrackData {
   }
 
   _speedProfile() {
-    this.vmax = this.computeProfile(0.97, 0.92);
-    this.vmaxPlayer = this.computeProfile(1.0, 0.97);
+    this.vmax = this.computeProfile(0.97 * this.gripMul, 0.92 * this.gripMul);
+    this.vmaxPlayer = this.computeProfile(this.gripMul, 0.97 * this.gripMul);
+  }
+
+  // Ajusta el agarre general (lluvia) y recalcula los perfiles de velocidad.
+  setGrip(g) {
+    if (g === this.gripMul) return;
+    this.gripMul = g;
+    this._speedProfile();
+  }
+
+  // Altura del asfalto en la muestra idx avanzando 'along' metros.
+  heightAt(idx, along = 0) {
+    const N = this.N;
+    const t = clamp(along / this.ds, -1, 1);
+    if (t >= 0) return this.py[idx] + (this.py[(idx + 1) % N] - this.py[idx]) * t;
+    return this.py[idx] + (this.py[idx] - this.py[(idx - 1 + N) % N]) * t;
+  }
+
+  heightAtS(s) {
+    const { N, ds } = this;
+    s = ((s % this.length) + this.length) % this.length;
+    const f = s / ds;
+    const i = Math.floor(f) % N;
+    return this.py[i] + (this.py[(i + 1) % N] - this.py[i]) * (f - Math.floor(f));
   }
 
   computeProfile(gripMul, brakeMul) {
@@ -291,6 +318,7 @@ export class TrackData {
     out.x = x + nx * lat;
     out.z = z + nz * lat;
     out.heading = this.heading[i] + wrapAngle(this.heading[j] - this.heading[i]) * t;
+    out.y = this.py[i] + (this.py[j] - this.py[i]) * t;
     out.idx = i;
     return out;
   }

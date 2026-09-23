@@ -10,9 +10,9 @@ export const IDLE_RPM = 4200;
 // Velocidad máxima (m/s) de cada marcha: define RPM y cambios automáticos.
 export const GEAR_TOP = [0, 22, 33, 43, 53, 63, 73, 84, 100];
 
-export const SURFACE = { ROAD: 0, KERB: 1, GRASS: 2, GRAVEL: 3 };
-const SURF_GRIP = [1, 0.92, 0.55, 0.42];
-const SURF_TRACTION = [1, 0.95, 0.6, 0.45];
+export const SURFACE = { ROAD: 0, KERB: 1, GRASS: 2, GRAVEL: 3, RUNOFF: 4 };
+const SURF_GRIP = [1, 0.92, 0.55, 0.42, 0.86];
+const SURF_TRACTION = [1, 0.95, 0.6, 0.45, 0.92];
 
 // Agarre lateral máximo (m/s²): mecánico + carga aerodinámica.
 export function latGrip(v) {
@@ -80,7 +80,7 @@ export function stepCar(car, inp, dt) {
   if (vf >= -0.5) {
     if (thr > 0) a += thr * engineAccel(Math.max(vf, 0)) * SURF_TRACTION[surf] * (car.powerMul || 1);
     if (brk > 0) {
-      if (vf > 0.6) a -= brk * brakeDecel(vf) * longAvail * (surf === SURFACE.ROAD ? 1 : 0.65);
+      if (vf > 0.6) a -= brk * brakeDecel(vf) * longAvail * (surf === SURFACE.ROAD ? 1 : surf === SURFACE.RUNOFF ? 0.85 : 0.65);
       else if (thr < 0.1) a -= brk * 5; // marcha atrás
     }
   } else {
@@ -88,6 +88,8 @@ export function stepCar(car, inp, dt) {
     if (thr > 0) a += thr * 12;
     if (brk > 0 && thr < 0.1) a -= brk * 4;
   }
+  // pendiente: la gravedad empuja cuesta abajo
+  a -= G * (car.grade || 0);
   const resist = dragDecel(Math.abs(vf), car.drsOpen) + surfaceDrag(surf, Math.abs(vf));
   const before = vf;
   vf += a * dt;

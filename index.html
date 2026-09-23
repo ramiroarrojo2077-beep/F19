@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>F19 Grand Prix</title>
-  <meta name="description" content="Juego de carreras de Fórmula en 3D para el navegador: circuito completo, 10 autos con IA, clima soleado y gráficos en tiempo real.">
+  <meta name="description" content="Juego de carreras de Fórmula en 3D para el navegador: 3 circuitos, clima, multijugador online, 10 autos y gráficos en tiempo real.">
   <meta name="theme-color" content="#0b0d11">
   <meta property="og:title" content="F19 Grand Prix">
-  <meta property="og:description" content="Carreras de Fórmula en 3D directamente en el navegador.">
+  <meta property="og:description" content="Carreras de Fórmula en 3D en el navegador. Jugá online con tus amigos.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23e10600'/%3E%3Ctext x='32' y='44' font-family='Arial' font-weight='900' font-size='30' text-anchor='middle' fill='white'%3EF19%3C/text%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -54,6 +54,7 @@
       </div>
       <div id="hud-drs">DRS</div>
     </div>
+    <div id="online-badge" class="hidden">● ONLINE</div>
     <div id="message"></div>
     <div id="submessage"></div>
     <div id="lights">
@@ -85,65 +86,166 @@
   </div>
 
   <div id="rotate">📱↻ Girá el teléfono para jugar en horizontal</div>
+  <div id="toast"></div>
 
   <!-- Menú principal -->
-  <div id="menu" class="overlay">
-    <div class="panel">
-      <div class="logo"><b>F19</b><span>GRAND PRIX</span></div>
-      <div class="opt-group modes" data-opt="mode">
-        <button data-v="race">🏁 Carrera</button>
-        <button data-v="tt">⏱ Contrarreloj</button>
+  <div id="menu" class="overlay" data-active="home">
+
+    <!-- Inicio -->
+    <section class="screen home" data-screen="home">
+      <div class="hero">
+        <div class="logo big"><b>F19</b><span>GRAND PRIX</span></div>
+        <p class="tag">Temporada 2026 · 3 circuitos · 10 autos · Online</p>
       </div>
-      <h3>Equipo</h3>
-      <div id="teams"></div>
-      <div id="race-opts" class="two">
-        <div>
-          <h3>Vueltas</h3>
-          <div class="opt-group" data-opt="laps">
-            <button data-v="1">1</button><button data-v="3">3</button><button data-v="5">5</button><button data-v="10">10</button>
+      <nav class="main-nav">
+        <button data-go="play" class="nav primary"><span class="ico">🏁</span><span><b>JUGAR</b><small>Carrera rápida o contrarreloj</small></span></button>
+        <button data-go="online" class="nav"><span class="ico">🌐</span><span><b>ONLINE</b><small>Corré contra tus amigos</small></span></button>
+        <button data-go="garage" class="nav"><span class="ico">🔧</span><span><b>GARAJE</b><small>Equipo, auto y piloto</small></span></button>
+        <button data-go="options" class="nav"><span class="ico">⚙️</span><span><b>OPCIONES</b><small>Gráficos, sonido y controles</small></span></button>
+      </nav>
+      <div class="home-foot">
+        <span id="home-driver"></span>
+        <span id="best-tt"></span>
+      </div>
+    </section>
+
+    <!-- Jugar -->
+    <section class="screen" data-screen="play">
+      <div class="panel wide-panel">
+        <header><button class="back" data-go="home">←</button><h2>CARRERA RÁPIDA</h2></header>
+        <div class="opt-group modes" data-opt="mode">
+          <button data-v="race">🏁 Carrera</button>
+          <button data-v="tt">⏱ Contrarreloj</button>
+        </div>
+        <h3>Circuito</h3>
+        <div class="tracks" id="track-cards"></div>
+        <div class="grid3">
+          <div id="race-opts-laps">
+            <h3>Vueltas</h3>
+            <div class="opt-group" data-opt="laps">
+              <button data-v="1">1</button><button data-v="3">3</button><button data-v="5">5</button><button data-v="10">10</button>
+            </div>
+          </div>
+          <div id="race-opts-diff">
+            <h3>Rivales</h3>
+            <div class="opt-group" data-opt="difficulty">
+              <button data-v="facil">Fácil</button><button data-v="normal">Normal</button><button data-v="dificil">Difícil</button>
+            </div>
+          </div>
+          <div>
+            <h3>Clima</h3>
+            <div class="opt-group" data-opt="weather">
+              <button data-v="sol">☀️ Sol</button><button data-v="nublado">☁️ Nubes</button><button data-v="lluvia">🌧 Lluvia</button>
+            </div>
           </div>
         </div>
-        <div>
-          <h3>Dificultad</h3>
-          <div class="opt-group" data-opt="difficulty">
-            <button data-v="facil">Fácil</button><button data-v="normal">Normal</button><button data-v="dificil">Difícil</button>
+        <button id="btn-start" class="cta">¡A CORRER!</button>
+      </div>
+    </section>
+
+    <!-- Garaje -->
+    <section class="screen garage" data-screen="garage">
+      <div class="panel">
+        <header><button class="back" data-go="home">←</button><h2>GARAJE</h2></header>
+        <h3>Tu nombre</h3>
+        <input class="text" id="player-name" maxlength="14" placeholder="Tu nombre" autocomplete="off">
+        <h3>Equipo</h3>
+        <div id="teams"></div>
+        <div class="team-info" id="team-info"></div>
+        <button class="cta" data-go="play">LISTO</button>
+      </div>
+    </section>
+
+    <!-- Opciones -->
+    <section class="screen" data-screen="options">
+      <div class="panel">
+        <header><button class="back" data-go="home">←</button><h2>OPCIONES</h2></header>
+        <h3>Calidad gráfica</h3>
+        <div class="opt-group" data-opt="quality">
+          <button data-v="ultra">Ultra</button><button data-v="alta">Alta</button><button data-v="media">Media</button><button data-v="baja">Baja</button>
+        </div>
+        <p id="quality-note">La calidad nueva se aplica al recargar. <button id="btn-reload">Recargar ahora</button></p>
+        <h3>Cámara inicial</h3>
+        <div class="opt-group" data-opt="camera">
+          <button data-v="chase">Persecución</button><button data-v="far">Lejana</button><button data-v="tcam">T-Cam</button><button data-v="cockpit">Cockpit</button>
+        </div>
+        <h3>Ayuda de frenado</h3>
+        <div class="opt-group" data-opt="assist">
+          <button data-v="1">Activada</button><button data-v="0">Desactivada</button>
+        </div>
+        <h3>Volumen</h3>
+        <input type="range" id="volume" min="0" max="100" step="5">
+        <h3>Controles</h3>
+        <div class="help">
+          <div><kbd>W</kbd><kbd>↑</kbd> Acelerar</div>
+          <div><kbd>S</kbd><kbd>↓</kbd> Frenar / Reversa</div>
+          <div><kbd>A</kbd><kbd>D</kbd> Girar</div>
+          <div><kbd>Espacio</kbd> DRS</div>
+          <div><kbd>C</kbd> Cámara</div>
+          <div><kbd>L</kbd> Mirar atrás</div>
+          <div><kbd>R</kbd> Volver a pista</div>
+          <div><kbd>Esc</kbd> Pausa</div>
+          <div><kbd>M</kbd> Sonido</div>
+          <div class="pad">🎮 Mando: RT/LT, stick, X = DRS, Y = cámara</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Online -->
+    <section class="screen" data-screen="online">
+      <div class="panel wide-panel">
+        <header><button class="back" data-go="home">←</button><h2>ONLINE</h2></header>
+        <div id="online-connect">
+          <h3>Tu nombre</h3>
+          <input class="text" id="online-name" maxlength="14" placeholder="Tu nombre" autocomplete="off">
+          <div class="two">
+            <div class="card-action">
+              <h3>Crear sala</h3>
+              <p>Sos el anfitrión: elegís circuito y reglas y compartís el código.</p>
+              <button id="btn-create" class="cta">CREAR SALA</button>
+            </div>
+            <div class="card-action">
+              <h3>Unirse</h3>
+              <p>Ingresá el código de 4 letras que te pasaron.</p>
+              <div class="join-row">
+                <input class="text code" id="join-code" maxlength="4" placeholder="CÓDIGO" autocomplete="off">
+                <button id="btn-join" class="cta">ENTRAR</button>
+              </div>
+            </div>
+          </div>
+          <p id="online-status"></p>
+          <p class="note">Conexión directa entre jugadores (WebRTC). Hasta 10 pilotos por sala; los lugares libres los ocupa la IA si querés.</p>
+        </div>
+        <div id="lobby" class="hidden">
+          <div class="room">
+            <div><small>CÓDIGO DE SALA</small><b id="room-code">----</b></div>
+            <button id="btn-copy-link">📋 Copiar link de invitación</button>
+          </div>
+          <div class="lobby-grid">
+            <div>
+              <h3>Pilotos <span id="lobby-count"></span></h3>
+              <ul id="lobby-players"></ul>
+            </div>
+            <div id="lobby-settings">
+              <h3>Circuito</h3>
+              <div class="tracks small" id="lobby-tracks"></div>
+              <div class="grid2">
+                <div><h3>Vueltas</h3><div class="opt-group" data-lopt="laps"><button data-v="1">1</button><button data-v="3">3</button><button data-v="5">5</button><button data-v="10">10</button></div></div>
+                <div><h3>Clima</h3><div class="opt-group" data-lopt="weather"><button data-v="sol">☀️</button><button data-v="nublado">☁️</button><button data-v="lluvia">🌧</button></div></div>
+                <div><h3>Completar con IA</h3><div class="opt-group" data-lopt="ai"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
+                <div><h3>Nivel IA</h3><div class="opt-group" data-lopt="difficulty"><button data-v="facil">Fácil</button><button data-v="normal">Normal</button><button data-v="dificil">Difícil</button></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="lobby-actions">
+            <button id="btn-lobby-start" class="cta">INICIAR CARRERA</button>
+            <p id="lobby-wait">Esperando a que el anfitrión inicie la carrera…</p>
+            <button id="btn-leave" class="ghost">Salir de la sala</button>
           </div>
         </div>
       </div>
-      <h3>Cámara</h3>
-      <div class="opt-group" data-opt="camera">
-        <button data-v="chase">Persecución</button><button data-v="far">Lejana</button><button data-v="tcam">T-Cam</button><button data-v="cockpit">Cockpit</button>
-      </div>
-      <div class="two">
-        <div>
-          <h3>Gráficos</h3>
-          <div class="opt-group" data-opt="quality">
-            <button data-v="alta">Alta</button><button data-v="media">Media</button><button data-v="baja">Baja</button>
-          </div>
-        </div>
-        <div>
-          <h3>Ayuda de frenado</h3>
-          <div class="opt-group" data-opt="assist">
-            <button data-v="1">Sí</button><button data-v="0">No</button>
-          </div>
-        </div>
-      </div>
-      <p id="quality-note">La calidad nueva se aplica al recargar. <button id="btn-reload">Recargar ahora</button></p>
-      <button id="btn-start" class="cta">¡A CORRER!</button>
-      <p id="best-tt"></p>
-    </div>
-    <div class="help">
-      <div><kbd>W</kbd><kbd>↑</kbd> Acelerar</div>
-      <div><kbd>S</kbd><kbd>↓</kbd> Frenar / Reversa</div>
-      <div><kbd>A</kbd><kbd>D</kbd> Girar</div>
-      <div><kbd>Espacio</kbd> DRS</div>
-      <div><kbd>C</kbd> Cámara</div>
-      <div><kbd>L</kbd> Mirar atrás</div>
-      <div><kbd>R</kbd> Volver a pista</div>
-      <div><kbd>Esc</kbd> Pausa</div>
-      <div><kbd>M</kbd> Sonido</div>
-      <div class="pad">🎮 Compatible con mando</div>
-    </div>
+    </section>
+
     <button id="btn-sound" class="icon" aria-label="Sonido">🔊</button>
     <button id="btn-fs" class="icon" aria-label="Pantalla completa">⛶</button>
   </div>
@@ -152,6 +254,7 @@
   <div id="pause" class="overlay hidden">
     <div class="panel small">
       <h2>PAUSA</h2>
+      <p id="pause-online" class="note hidden">Carrera online: el auto sigue en pista mientras esté pausado.</p>
       <button id="btn-resume" class="cta">Continuar</button>
       <button id="btn-restart">Reiniciar carrera</button>
       <button id="btn-menu">Menú principal</button>

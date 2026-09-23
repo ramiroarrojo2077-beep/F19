@@ -90,6 +90,11 @@ export class AudioEngine {
     v.filter.frequency.setTargetAtTime(cutoff, t, 0.05);
   }
 
+  setVolume(v) {
+    this.volume = v;
+    if (this.master && !this.muted) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05);
+  }
+
   setMuted(m) {
     this.muted = m;
     if (this.master) this.master.gain.setTargetAtTime(m ? 0 : this.volume, this.ctx.currentTime, 0.05);
@@ -121,9 +126,9 @@ export class AudioEngine {
       this.wind.g.gain.setTargetAtTime(clamp(v / 95, 0, 1) ** 2 * 0.22, t, 0.1);
       this.wind.f.frequency.setTargetAtTime(400 + v * 12, t, 0.1);
       const sq = clamp(player.slip * 0.12 + Math.max(0, player.understeer - 0.5) * 0.45 + (player.input.brake > 0.9 && v > 25 ? 0.2 : 0), 0, 1);
-      this.screech.g.gain.setTargetAtTime(player.surface <= 1 && v > 5 ? sq * 0.16 : 0, t, 0.05);
+      this.screech.g.gain.setTargetAtTime((player.surface <= 1 || player.surface === 4) && v > 5 ? sq * 0.16 : 0, t, 0.05);
       this.screech.f.frequency.setTargetAtTime(1500 + v * 6, t, 0.1);
-      const rough = player.surface === 1 ? 0.5 : player.surface >= 2 ? 0.7 : 0;
+      const rough = player.surface === 1 ? 0.5 : player.surface === 2 || player.surface === 3 ? 0.7 : player.surface === 4 ? 0.12 : 0;
       this.rumble.g.gain.setTargetAtTime(rough * clamp(v / 30, 0, 1) * 0.6, t, 0.05);
     }
     this.crowd.g.gain.setTargetAtTime(crowdLevel * 0.05, t, 0.3);

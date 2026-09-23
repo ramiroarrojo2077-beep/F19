@@ -24,10 +24,17 @@ export class HUD {
     this.towerRows = [];
     this.towerT = 0;
     this.msgT = 0;
-    this._initMap();
+    if (track) this._initMap();
   }
 
   show(v) { this.el.root.classList.toggle('hidden', !v); }
+
+  setTrack(track) {
+    this.track = track;
+    this._initMap();
+    this.el.tower.innerHTML = '';
+    this.towerRows = [];
+  }
 
   _initMap() {
     const c = this.el.map;
@@ -80,7 +87,7 @@ export class HUD {
     g.drawImage(this.mapBg, 0, 0);
     g.scale(dpr, dpr);
     for (const c of cars) {
-      if (c === player) continue;
+      if (c === player || !c.model.root.parent) continue;
       const [x, y] = this.toMap(c.x, c.z);
       g.fillStyle = c.team.primary;
       g.strokeStyle = '#000'; g.lineWidth = 1.2;
@@ -165,6 +172,7 @@ export class HUD {
       root.appendChild(row);
       this.towerRows.push(row);
     }
+    while (this.towerRows.length > ranking.length) this.towerRows.pop().remove();
     const leader = ranking[0];
     ranking.forEach((c, k) => {
       const row = this.towerRows[k];
@@ -178,7 +186,7 @@ export class HUD {
         if (lapsDown >= 1 && !c.finished) gap = `+${lapsDown} V`;
         else {
           const g = sim.gapTo(c, leader);
-          gap = g != null ? `+${g.toFixed(1)}` : '';
+          gap = g != null ? `+${Math.max(0, g).toFixed(1)}` : '';
         }
       }
       row.children[3].textContent = gap;

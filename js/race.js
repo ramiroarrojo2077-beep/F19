@@ -6,7 +6,7 @@ import { clamp, damp, wrapAngle } from './utils.js';
 export const CP = 25; // metros entre puntos de cronometraje
 
 export function resetCarState(c) {
-  c.x = 0; c.z = 0; c.heading = 0;
+  c.x = 0; c.y = 0; c.z = 0; c.heading = 0; c.grade = 0;
   c.vx = 0; c.vz = 0; c.speed = 0;
   c.yawRate = 0; c.steerAngle = 0;
   c.surface = 0; c.slip = 0; c.understeer = 0;
@@ -22,6 +22,7 @@ export function resetCarState(c) {
   c.stuckTime = 0; c.wrongWay = 0; c.offTime = 0;
   c.hitCooldown = 0;
   c.gripMul = 1; c.powerMul = 1;
+  c.remote = false; c.netBuf = []; c.netRaw = null; c.netTs = null;
   return c;
 }
 
@@ -90,6 +91,7 @@ export class RaceSim {
     c.speed = speed; c.yawRate = 0; c.steerAngle = 0;
     T.project(c.x, c.z, p.idx, this.proj);
     c.idx = this.proj.idx; c.lat = this.proj.lat; c.s = this.proj.s;
+    c.y = T.heightAt(c.idx, this.proj.along);
   }
 
   // Reubica el auto en la pista (tecla R o auto atascado)
@@ -114,6 +116,7 @@ export class RaceSim {
     if (this.started) this.time += dt;
     const t = this.time;
     for (const c of this.cars) {
+      if (c.remote) { this._remote(c, t); continue; }
       if (!this.started) {
         // parrilla: el auto no se mueve pero el motor responde
         c.speed = 0; c.vx = 0; c.vz = 0;
@@ -123,9 +126,11 @@ export class RaceSim {
       }
       this._drs(c);
       stepCar(c, c.input, dt);
-      const prevIdx = c.idx;
+      const prevS = c.s;
       T.project(c.x, c.z, c.idx, this.proj);
       c.idx = this.proj.idx; c.lat = this.proj.lat;
+      c.y = T.heightAt(c.idx, this.proj.along);
+      c.grade = T.grade[c.idx] * Math.cos(T.heading[c.idx] - c.heading);
       let s = this.proj.s;
       if (s < 0) s += T.length;
       if (s >= T.length) s -= T.length;
@@ -133,10 +138,10 @@ export class RaceSim {
       this._surface(c);
       this._barrier(c);
 
-      // Vueltas
-      const N = T.N;
-      if (prevIdx > N * 0.75 && c.idx < N * 0.25) this._crossLine(c, t);
-      else if (prevIdx < N * 0.25 && c.idx > N * 0.75) c.lap--;
+      // Vueltas: cruce de meta detectado por la distancia recorrida (continua)
+      const L = T.length;
+      if (prevS > L * 0.75 && c.s < L * 0.25) this._crossLine(c, t);
+      else if (prevS < L * 0.25 && c.s > L * 0.75) c.lap--;
       c.raceDist = c.lap * T.length + c.s;
       const k = Math.floor(c.raceDist / CP);
       if (k > c.cpk) {
@@ -157,6 +162,25 @@ export class RaceSim {
       if (c.hitCooldown > 0) c.hitCooldown -= dt;
     }
     if (this.started) this._collisions();
+  }
+
+  // Auto controlado por otro jugador: solo actualizar datos derivados
+  _remote(c, t) {
+    const T = this.track;
+    T.project(c.x, c.z, c.idx, this.proj);
+    c.idx = this.proj.idx; c.lat = this.proj.lat;
+    c.y = T.heightAt(c.idx, this.proj.along);
+    c.grade = T.grade[c.idx] * Math.cos(T.heading[c.idx] - c.heading);
+    let s = this.proj.s;
+    if (s < 0) s += T.length;
+    if (s >= T.length) s -= T.length;
+    c.s = s;
+    if (!this.started) return;
+    const k = Math.floor(c.raceDist / CP);
+    if (k > c.cpk && k - c.cpk < 400) {
+      for (let j = Math.max(c.cpk + 1, k - 20); j <= k; j++) c.cp[j] = t;
+      c.cpk = k;
+    }
   }
 
   _crossLine(c, t) {
@@ -194,6 +218,7 @@ export class RaceSim {
     const side = c.lat >= 0 ? 1 : -1;
     if (a <= T.hw) c.surface = SURFACE.ROAD;
     else if (T.kerb[c.idx] && a <= T.hw + KERB_W) c.surface = SURFACE.KERB;
+    else if (T.runoffTarmac) c.surface = SURFACE.RUNOFF;
     else if (T.gravelAt(c.idx, side) > 0.5 && a > T.hw + KERB_W + 1.2) c.surface = SURFACE.GRAVEL;
     else c.surface = SURFACE.GRASS;
   }
@@ -201,7 +226,7 @@ export class RaceSim {
   _barrier(c) {
     const T = this.track;
     const side = c.lat >= 0 ? 1 : -1;
-    const lim = T.barrierAt(c.idx, side) - CAR_HALF_WIDTH * 1.05;
+    const lim = (T.wallAt ? T.wallAt(c.idx, side) : T.barrierAt(c.idx, side)) - CAR_HALF_WIDTH * 1.05;
     const a = Math.abs(c.lat);
     if (a <= lim) return;
     const pen = a - lim;
@@ -296,14 +321,17 @@ export class RaceSim {
             const d = Math.hypot(dx, dz);
             if (d >= 2 * R || d < 1e-4) continue;
             dx /= d; dz /= d;
-            const pen = (2 * R - d) / 2;
-            a.x -= dx * pen; a.z -= dz * pen;
-            b.x += dx * pen; b.z += dz * pen;
+            if (a.remote && b.remote) continue;
+            // un auto remoto se trata como masa infinita (su posición la manda la red)
+            const wa = a.remote ? 0 : b.remote ? 1 : 0.5, wb = 1 - wa;
+            const pen = 2 * R - d;
+            a.x -= dx * pen * wa; a.z -= dz * pen * wa;
+            b.x += dx * pen * wb; b.z += dz * pen * wb;
             const vrel = (b.vx - a.vx) * dx + (b.vz - a.vz) * dz;
             if (vrel < 0) {
-              const jImp = (-(1 + 0.25) * vrel) / 2;
-              a.vx -= jImp * dx; a.vz -= jImp * dz;
-              b.vx += jImp * dx; b.vz += jImp * dz;
+              const jImp = -(1 + 0.25) * vrel;
+              a.vx -= jImp * dx * wa; a.vz -= jImp * dz * wa;
+              b.vx += jImp * dx * wb; b.vz += jImp * dz * wb;
               if (-vrel > 2 && (a.hitCooldown <= 0 || b.hitCooldown <= 0)) {
                 this.events.push({ type: 'contact', car: a, other: b, strength: -vrel });
                 a.hitCooldown = b.hitCooldown = 0.3;
